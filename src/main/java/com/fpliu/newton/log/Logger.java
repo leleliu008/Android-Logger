@@ -113,6 +113,17 @@ public final class Logger {
     }
 
     /**
+     * 异步保存异常堆栈信息到文件
+     */
+    public static void asyncSaveFile(File logFile, String content) {
+        if (logFile == null || TextUtils.isEmpty(content)) {
+            return;
+        }
+
+        blockingQueue.add(new Item(logFile, content));
+    }
+
+    /**
      * 同步保存异常堆栈信息到文件
      */
     public static void syncSaveFile(File logFile, Throwable throwable) {
@@ -127,24 +138,13 @@ public final class Logger {
     /**
      * 同步保存异常堆栈信息到文件
      */
-    public static void asyncSaveFile(File logFile, String content) {
-        if (logFile == null || TextUtils.isEmpty(content)) {
-            return;
-        }
-
-        blockingQueue.add(new Item(logFile, content));
-    }
-
-    /**
-     * 同步保存异常堆栈信息到文件
-     */
     public static void syncSaveFile(File logFile, String content) {
         if (logFile == null || TextUtils.isEmpty(content)) {
             return;
         }
 
         try {
-            Okio.buffer(Okio.sink(logFile)).writeUtf8(content);
+            Okio.buffer(Okio.sink(logFile)).writeUtf8(content).flush();
         } catch (IOException e) {
             e(PREFIX, "syncSaveFile()", e);
         }
