@@ -34,7 +34,7 @@ public final class Logger {
     /**
      * TAG的前缀，便于过滤
      */
-    public static final String PREFIX = Logger.class.getSimpleName();
+    public static final String PREFIX = "Logger_";
 
     public static Context appContext;
 
@@ -144,7 +144,7 @@ public final class Logger {
         }
 
         try {
-            Okio.buffer(Okio.sink(logFile)).writeUtf8(content).flush();
+            Okio.buffer(Okio.appendingSink(logFile)).writeUtf8(content).flush();
         } catch (IOException e) {
             e(PREFIX, "syncSaveFile()", e);
         }
