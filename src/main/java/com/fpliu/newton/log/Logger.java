@@ -14,9 +14,9 @@ import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 
+import io.reactivex.Observable;
+import io.reactivex.schedulers.Schedulers;
 import okio.Okio;
 
 /**
@@ -29,42 +29,32 @@ public final class Logger {
     /**
      * 调试日志的开关，一般Debug版本中打开，便于开发人员观察日志，Release版本中关闭
      */
-    public static final boolean ENABLED = true;
+    private static boolean ENABLED = true;
 
     /**
      * TAG的前缀，便于过滤
      */
-    public static final String PREFIX = "Logger_";
+    private static String PREFIX = "Logger_";
 
-    public static Context appContext;
-
-    public static int BLOCKING_SIZE = 100;
-
-    private static final BlockingQueue<Item> blockingQueue = new ArrayBlockingQueue<>(BLOCKING_SIZE);
-
-    private static final Thread worker = new Thread("logger") {
-        @Override
-        public void run() {
-            super.run();
-
-            while (true) {
-                try {
-                    Item item = blockingQueue.take();
-                    syncSaveFile(item.logFile, item.content);
-                } catch (InterruptedException e) {
-                    e(PREFIX, "run()", e);
-                }
-            }
-        }
-    };
-
-    static {
-        worker.start();
-    }
+    private static Context appContext;
 
     private Logger() {
     }
 
+    public static void init(Context appContext) {
+        Logger.appContext = appContext;
+    }
+
+    public static void init(Context appContext, String prefix) {
+        Logger.appContext = appContext;
+        Logger.PREFIX = prefix;
+    }
+
+    public static void init(Context appContext, String prefix, boolean enabled) {
+        Logger.appContext = appContext;
+        Logger.PREFIX = prefix;
+        Logger.ENABLED = enabled;
+    }
 
     public static int v(String tag, String msg) {
         return ENABLED ? Log.v(PREFIX + tag, "" + msg) : 0;
@@ -120,33 +110,46 @@ public final class Logger {
             return;
         }
 
-        blockingQueue.add(new Item(logFile, content));
+        Observable
+                .create(emitter -> {
+                    boolean isSuccess = syncSaveFile(logFile, content);
+                    if (!emitter.isDisposed()) {
+                        emitter.onNext(isSuccess);
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(Schedulers.io())
+                .subscribe(isSuccess -> {
+                    //do nothing
+                });
     }
 
     /**
      * 同步保存异常堆栈信息到文件
      */
-    public static void syncSaveFile(File logFile, Throwable throwable) {
+    public static boolean syncSaveFile(File logFile, Throwable throwable) {
         if (logFile == null || throwable == null) {
-            return;
+            return false;
         }
 
         String content = getEnvironmentInfo(appContext).append(getExceptionTrace(throwable)).toString();
-        syncSaveFile(logFile, content);
+        return syncSaveFile(logFile, content);
     }
 
     /**
      * 同步保存异常堆栈信息到文件
      */
-    public static void syncSaveFile(File logFile, String content) {
+    public static boolean syncSaveFile(File logFile, String content) {
         if (logFile == null || TextUtils.isEmpty(content)) {
-            return;
+            return false;
         }
 
         try {
-            Okio.buffer(Okio.appendingSink(logFile)).writeUtf8(content).flush();
+            Okio.buffer(Okio.appendingSink(logFile)).writeUtf8(content).close();
+            return true;
         } catch (IOException e) {
             e(PREFIX, "syncSaveFile()", e);
+            return false;
         }
     }
 
@@ -214,17 +217,5 @@ public final class Logger {
             e(PREFIX, "getMyVersionName()", e);
         }
         return "";
-    }
-
-    private static class Item {
-
-        public File logFile;
-
-        public String content;
-
-        Item(File logFile, String content) {
-            this.logFile = logFile;
-            this.content = content;
-        }
     }
 }

@@ -60,6 +60,7 @@ retrolambda {//指定将源码编译的级别，使用下列代码，会将代�
 dependencies {
     compile fileTree(dir: 'src/main/libs', include: ['*.jar'])
     compile 'com.squareup.okio:okio:1.13.0'
+    compile 'io.reactivex.rxjava2:rxjava:2.1.0'
 }
 
 
